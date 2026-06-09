@@ -1,0 +1,172 @@
+HTML
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>Jokeriajat</title>
+
+<style>
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background: #0074BF;
+    color: white;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.container {
+    width: 100%;
+    text-align: center;
+}
+
+.stop {
+    font-size: 3vw;
+    font-weight: 600;
+    margin-bottom: 2vh;
+    letter-spacing: 0.1em;
+}
+
+.minutes {
+    font-size: 50vw;
+    font-weight: 800;
+    line-height: 0.8;
+}
+
+.updated {
+    margin-top: 2vh;
+    font-size: 2vw;
+    opacity: 0.8;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+    <div class="stop" id="stopName">Ladataan...</div>
+    <div class="minutes" id="minutes">--</div>
+    <div class="updated" id="updated"></div>
+</div>
+
+<script>
+
+const API_KEY = "OMA_API_AVAIN";
+
+const API_URL =
+"https://api.digitransit.fi/routing/v2/hsl/gtfs/v1";
+
+const STOPS = {
+
+    h0716: {
+        name: "Karhukallio itään",
+        gtfsId: "HSL:XXXXXXX"
+    },
+
+    h0717: {
+        name: "Karhukallio länteen",
+        gtfsId: "HSL:YYYYYYY"
+    }
+
+};
+
+const params =
+    new URLSearchParams(window.location.search);
+
+const stopCode =
+    (params.get("stop") || "").toLowerCase();
+
+const stop =
+    STOPS[stopCode];
+
+async function update() {
+
+    if (!stop) {
+
+        document.getElementById("stopName")
+            .textContent = "Tuntematon pysäkki";
+
+        return;
+    }
+
+    const query = `
+    {
+      stop(id: "${stop.gtfsId}") {
+        stoptimesWithoutPatterns(
+          numberOfDepartures: 10
+        ) {
+          realtimeDeparture
+          serviceDay
+        }
+      }
+    }`;
+
+    const response = await fetch(API_URL, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "digitransit-subscription-key": API_KEY
+        },
+        body: JSON.stringify({ query })
+    });
+
+    const data = await response.json();
+
+    const departures =
+        data.data.stop.stoptimesWithoutPatterns;
+
+    const now =
+        Date.now() / 1000;
+
+    let nextMinutes = "--";
+
+    for (const dep of departures) {
+
+        const departureTime =
+            dep.serviceDay +
+            dep.realtimeDeparture;
+
+        const diff =
+            Math.round(
+                (departureTime - now) / 60
+            );
+
+        if (diff >= 0) {
+
+            nextMinutes =
+                diff === 0
+                ? "NYT"
+                : diff;
+
+            break;
+        }
+    }
+
+    document.getElementById("stopName")
+        .textContent = stop.name;
+
+    document.getElementById("minutes")
+        .textContent = nextMinutes;
+
+    document.getElementById("updated")
+        .textContent =
+        new Date()
+        .toLocaleTimeString("fi-FI");
+}
+
+update();
+setInterval(update, 60000);
+
+</script>
+
+</body>
+</html>
